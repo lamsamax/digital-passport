@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   FileCheck,
@@ -20,11 +20,29 @@ const navItems = [
   { id: 'passport', label: 'Material Passport', icon: FileCheck },
   { id: 'green-route', label: 'Green Route', icon: Leaf },
   { id: 'supply-chain', label: 'Supply Chain', icon: Route },
-  { id: 'procurement', label: 'Smart Procurement', icon: ShoppingCart },
 ];
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+
+    // Set initial state
+    handleResize();
+
+    // Add event listener
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex">

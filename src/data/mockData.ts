@@ -12,31 +12,25 @@ export const comparisonData = [
     co2: 12500,
   },
   {
-    category: 'EcoTrace Optimized',
+    category: 'Optimized Sourcing',
     co2: 8420,
   },
 ];
 
 export const suppliers = [
-  'Cementara Kakanj',
-  'ArcelorMittal Zenica',
-  'Import China',
-  'HeidelbergCement Lukavac',
-  'Turkish Steel Import',
+  'Tvornica Cementa Kakanj (TCK)',
 ];
 
-export const materialTypes = ['Cement', 'Steel', 'Aluminum'] as const;
+export const materialTypes = [
+  'Kakanj Cement Standard (CEM II)',
+  'Kakanj Cement Profi (CEM I)',
+  'Kakanj Sivi',
+] as const;
 
 export const emissionsData: Record<string, number> = {
-  'Cement-Cementara Kakanj': 820,
-  'Cement-HeidelbergCement Lukavac': 760,
-  'Cement-Import China': 950,
-  'Steel-ArcelorMittal Zenica': 1850,
-  'Steel-Turkish Steel Import': 2100,
-  'Steel-Import China': 2300,
-  'Aluminum-ArcelorMittal Zenica': 1200,
-  'Aluminum-Import China': 1650,
-  'Aluminum-Turkish Steel Import': 1400,
+  'Kakanj Cement Standard (CEM II)-Tvornica Cementa Kakanj (TCK)': 720,
+  'Kakanj Cement Profi (CEM I)-Tvornica Cementa Kakanj (TCK)': 680,
+  'Kakanj Sivi-Tvornica Cementa Kakanj (TCK)': 750,
 };
 
 export const journeySteps: JourneyStep[] = [
@@ -51,7 +45,7 @@ export const journeySteps: JourneyStep[] = [
   {
     id: 2,
     title: 'Production Facility',
-    location: 'Cementara Kakanj Factory',
+    location: 'Tvornica Cementa Kakanj (TCK)',
     icon: 'factory',
     emissions: 620,
     status: 'high',
@@ -66,29 +60,11 @@ export const journeySteps: JourneyStep[] = [
   },
   {
     id: 4,
-    title: 'Construction Site',
-    location: 'Project Site, Sarajevo',
+    title: 'Delivery & Distribution',
+    location: 'Destination Site, Sarajevo',
     icon: 'hard-hat',
     emissions: 0,
     status: 'low',
   },
 ];
 
-export const procurementOptions: ProcurementOption[] = [
-  {
-    name: 'Import Steel (China)',
-    basePrice: 5500,
-    co2Emissions: 2300,
-    cbamTax: 2070,
-    totalCost: 7570,
-    risk: 'High Risk',
-  },
-  {
-    name: 'Local Steel (ArcelorMittal Zenica)',
-    basePrice: 6200,
-    co2Emissions: 1850,
-    cbamTax: 0,
-    totalCost: 6200,
-    risk: 'Recommended',
-  },
-];
