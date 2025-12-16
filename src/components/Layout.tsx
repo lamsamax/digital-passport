@@ -48,8 +48,10 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     <div className="min-h-screen bg-slate-50 flex">
       <aside
         className={`${
-          sidebarOpen ? 'w-64' : 'w-20'
-        } bg-gradient-to-b from-slate-800 to-slate-900 text-white transition-all duration-300 flex flex-col`}
+          sidebarOpen ? 'w-64 lg:w-64 w-full' : 'w-20'
+        } bg-gradient-to-b from-slate-800 to-slate-900 text-white transition-all duration-300 flex flex-col ${
+          sidebarOpen ? 'fixed lg:relative inset-0 z-50 lg:z-auto' : 'relative'
+        }`}
       >
         <div className="p-6 flex items-center justify-between border-b border-slate-700">
           {sidebarOpen && (
