@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { QrCode, Package, CheckCircle, XCircle, Leaf, Factory, TrendingDown } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { materialTypes, suppliers, emissionsData } from '../data/mockData';
 
 export default function MaterialPassport() {
@@ -10,6 +11,54 @@ export default function MaterialPassport() {
   });
   const [showPassport, setShowPassport] = useState(false);
   const [passportData, setPassportData] = useState<any>(null);
+  const [scannerActive, setScannerActive] = useState(false);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+
+  useEffect(() => {
+    if (!scannerActive) {
+      return;
+    }
+
+    const scanner = new Html5QrcodeScanner(
+      'reader',
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+      },
+      false
+    );
+
+    scannerRef.current = scanner;
+
+    scanner.render(
+      (decodedText) => {
+        try {
+          const qrData = JSON.parse(decodedText);
+          if (qrData.materialType && qrData.supplier && qrData.weight !== undefined) {
+            setFormData({
+              materialType: qrData.materialType,
+              supplier: qrData.supplier,
+              weight: qrData.weight,
+            });
+            setScannerActive(false);
+          }
+        } catch (error) {
+          console.error('Invalid QR code format');
+        }
+      },
+      (error) => {
+        console.warn('QR scan error:', error);
+      }
+    );
+
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(() => {});
+        scannerRef.current = null;
+      }
+    };
+  }, [scannerActive]);
 
   const handleCalculate = () => {
     const key = `${formData.materialType}-${formData.supplier}`;
@@ -36,15 +85,34 @@ export default function MaterialPassport() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-emerald-600 rounded-lg flex items-center justify-center">
-              <QrCode className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-emerald-500 rounded-lg flex items-center justify-center">
+                <QrCode className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Scan Material Batch</h3>
+                <p className="text-sm text-slate-500">Enter or scan QR code data</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">Scan Material Batch</h3>
-              <p className="text-sm text-slate-500">Enter or scan QR code data</p>
-            </div>
+            <button
+              onClick={() => setScannerActive(!scannerActive)}
+              className={`px-4 py-2 rounded-lg font-medium text-white transition-colors ${
+                scannerActive
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : 'bg-emerald-500 hover:bg-emerald-600'
+              }`}
+            >
+              {scannerActive ? 'Stop Scanner' : 'Start Scanner'}
+            </button>
           </div>
+
+          {scannerActive && (
+            <div
+              id="reader"
+              className="mb-6 w-full rounded-lg overflow-hidden border-2 border-emerald-500"
+            />
+          )}
 
           <div className="space-y-5">
             <div>
@@ -100,10 +168,10 @@ export default function MaterialPassport() {
             <div className="flex items-start gap-3">
               <Package className="w-5 h-5 text-slate-500 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-slate-900 mb-1">QR Code Simulation</p>
+                <p className="text-sm font-medium text-slate-900 mb-1">QR Code Format</p>
                 <p className="text-xs text-slate-600">
-                  In production, this would scan actual QR codes from material batches and automatically
-                  populate the form with embedded certificate data.
+                  Expected JSON format: {'{'}
+                  "materialType": "Cement", "supplier": "Name", "weight": 10{'}'}
                 </p>
               </div>
             </div>
