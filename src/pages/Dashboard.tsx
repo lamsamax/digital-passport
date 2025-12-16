@@ -1,7 +1,6 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Cloud, Euro, Award } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
-import { dashboardMetrics, comparisonData } from '../data/mockData';
+import { dashboardMetrics } from '../data/mockData';
 
 export default function Dashboard() {
   return (
