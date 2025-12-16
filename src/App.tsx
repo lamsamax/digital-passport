@@ -3,7 +3,6 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import MaterialPassport from './pages/MaterialPassport';
 import SupplyChain from './pages/SupplyChain';
-import SmartProcurement from './pages/SmartProcurement';
 import GreenRoute from './pages/GreenRoute';
 
 function App() {
@@ -19,8 +18,6 @@ function App() {
         return <GreenRoute />;
       case 'supply-chain':
         return <SupplyChain />;
-      case 'procurement':
-        return <SmartProcurement />;
       default:
         return <Dashboard />;
     }
