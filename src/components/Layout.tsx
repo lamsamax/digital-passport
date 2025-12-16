@@ -18,6 +18,7 @@ interface LayoutProps {
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'passport', label: 'Material Passport', icon: FileCheck },
+  { id: 'green-route', label: 'Green Route', icon: Leaf },
   { id: 'supply-chain', label: 'Supply Chain', icon: Route },
   { id: 'procurement', label: 'Smart Procurement', icon: ShoppingCart },
 ];
