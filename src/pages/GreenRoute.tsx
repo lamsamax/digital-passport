@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MapPin, Truck, Train, Clock } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -23,97 +23,169 @@ const CO2_FACTORS = {
   rail: 0.025, // Rail: ~25g CO2/ton-km
 };
 
-// Fetch route from Vroom API (faster than OSRM)
-const fetchRoute = async (start: [number, number], end: [number, number], profile: string = 'car') => {
+// Fetch alternative routes from OSRM (returns array of routes)
+const fetchRoutes = async (start: [number, number], end: [number, number], profile: string = 'car') => {
   try {
-    const url = `https://router.project-osrm.org/route/v1/${profile}/${start[1]},${start[0]};${end[1]},${end[0]}?geometries=geojson`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${start[1]},${start[0]};${end[1]},${end[0]}?geometries=geojson&overview=full&alternatives=true`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
     if (!response.ok) throw new Error('Route fetch failed');
     const data = await response.json();
-    if (data.routes && data.routes[0]) {
-      const coords = data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
-      const distance = data.routes[0].distance / 1000; // Convert to km
-      const duration = Math.round(data.routes[0].duration / 60); // Convert to minutes
-      return { coords, distance, duration };
+    if (data.routes && data.routes.length) {
+      return data.routes.map((r: any) => ({
+        coords: r.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]),
+        distance: r.distance / 1000, // km
+        duration: Math.round(r.duration / 60), // minutes
+      }));
     }
   } catch (error) {
-    console.error('Error fetching route:', error);
+    console.error('Error fetching routes:', error);
   }
   return null;
 };
 
-// Calculate CO2 emissions
+// Simple geocode using Nominatim (returns [lat,lng])
+const geocode = async (q: string): Promise<[number, number] | null> => {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data[0]) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+  } catch (e) {
+    console.error('Geocode error', e);
+  }
+  return null;
+};
+
+// Calculate CO2 emissions (kg)
 const calculateCO2 = (distance: number, weight: number, factor: number): number => {
-  return Math.round((distance * weight * factor) / 1000); // Result in kg CO2
+  return Math.round(distance * weight * factor); // Result in kg CO2
+};
+
+// Search suggestions (Nominatim) - returns up to 5 suggestions
+const suggest = async (q: string) => {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&addressdetails=1&limit=5`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data;
+  } catch (e) {
+    return [];
+  }
 };
 
 export default function GreenRoute() {
   const [origin, setOrigin] = useState('Cementara Kakanj');
   const [destination, setDestination] = useState('Sarajevo Tower');
   const [weight, setWeight] = useState('10'); // tons
+  const [vehicleType, setVehicleType] = useState<'truck' | 'ecodrive' | 'rail'>('truck');
   const [results, setResults] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const mapRef = useRef<any>(null);
+
+  const [originCoords, setOriginCoords] = useState<[number, number] | null>(null);
+  const [destCoords, setDestCoords] = useState<[number, number] | null>(null);
+  const [originSuggestions, setOriginSuggestions] = useState<any[]>([]);
+  const [destSuggestions, setDestSuggestions] = useState<any[]>([]);
+  const originTimer = useRef<number | null>(null);
+  const destTimer = useRef<number | null>(null);
+
+  // Fit map to the selected route when results or selectedIndex change
+  useEffect(() => {
+    if (!mapRef.current || !results || selectedIndex === null) return;
+    try {
+      const route = results[selectedIndex];
+      const bounds = route.routeCoords.map((c: [number, number]) => [c[0], c[1]]);
+      // @ts-ignore
+      mapRef.current.fitBounds(bounds, { padding: [40, 40] });
+    } catch (e) {
+      // ignore
+    }
+  }, [results, selectedIndex]);
+
+  // Handlers for suggestion typeahead (debounced)
+  const handleOriginChange = (val: string) => {
+    setOrigin(val);
+    setOriginCoords(null);
+    setOriginSuggestions([]);
+    if (originTimer.current) window.clearTimeout(originTimer.current);
+    if (!val || val.length < 3) return;
+    originTimer.current = window.setTimeout(async () => {
+      const s = await suggest(val);
+      setOriginSuggestions(s);
+    }, 350) as unknown as number;
+  };
+
+  const handleDestChange = (val: string) => {
+    setDestination(val);
+    setDestCoords(null);
+    setDestSuggestions([]);
+    if (destTimer.current) window.clearTimeout(destTimer.current);
+    if (!val || val.length < 3) return;
+    destTimer.current = window.setTimeout(async () => {
+      const s = await suggest(val);
+      setDestSuggestions(s);
+    }, 350) as unknown as number;
+  };
+
+  const pickOriginSuggestion = (item: any) => {
+    setOrigin(item.display_name);
+    setOriginCoords([parseFloat(item.lat), parseFloat(item.lon)]);
+    setOriginSuggestions([]);
+  };
+
+  const pickDestSuggestion = (item: any) => {
+    setDestination(item.display_name);
+    setDestCoords([parseFloat(item.lat), parseFloat(item.lon)]);
+    setDestSuggestions([]);
+  };
 
   const handleCalculate = async () => {
     setLoading(true);
     const weightNum = parseFloat(weight) || 10;
 
-    // Fetch realistic routes for each transport mode
-    const routeDataA = await fetchRoute(ORIGIN_COORDS, DESTINATION_COORDS, 'car');
-    const routeDataB = await fetchRoute(ORIGIN_COORDS, DESTINATION_COORDS, 'car');
-    const routeDataC = await fetchRoute(ORIGIN_COORDS, DESTINATION_COORDS, 'car');
+    // Prefer selected suggestion coords, otherwise geocode, fallback to hardcoded coords
+    const oCoords = originCoords || (await geocode(origin)) || ORIGIN_COORDS;
+    const dCoords = destCoords || (await geocode(destination)) || DESTINATION_COORDS;
 
-    // Fallback coordinates if fetch fails
-    const fallbackCoords = [[44.0306, 18.3861], [43.9435, 18.3878], [43.8564, 18.4131]];
+    // Fetch alternative routes once
+    const routes = (await fetchRoutes(oCoords, dCoords, 'car')) || [];
 
-    const optionA = {
-      id: 'a',
-      title: 'Option A (Standard Truck)',
-      distance: routeDataA?.distance || 28,
-      duration: routeDataA?.duration || 45,
-      weight: weightNum,
-      co2: calculateCO2(routeDataA?.distance || 28, weightNum, CO2_FACTORS.truck),
-      routeCoords: routeDataA?.coords || fallbackCoords,
-      color: '#ef4444',
-    };
+    // If no alternatives returned, use single fallback route
+    const finalRoutes = routes.length ? routes : [{ coords: [[44.0306, 18.3861], [43.9435, 18.3878], [43.8564, 18.4131]], distance: 28, duration: 45 }];
 
-    const optionB = {
-      id: 'b',
-      title: 'Option B (Eco-Driving/Optimized)',
-      distance: routeDataB?.distance || 28,
-      duration: (routeDataB?.duration || 45) + 5, // Slightly longer
-      weight: weightNum,
-      co2: calculateCO2(routeDataB?.distance || 28, weightNum, CO2_FACTORS.ecodrive),
-      routeCoords: routeDataB?.coords || fallbackCoords,
-      color: '#eab308',
-    };
+    // Build result entries per route using selected vehicle type
+    const entries = finalRoutes.map((rt, idx) => {
+      const factor = vehicleType === 'truck' ? CO2_FACTORS.truck : vehicleType === 'ecodrive' ? CO2_FACTORS.ecodrive : CO2_FACTORS.rail;
+      const co2 = calculateCO2(rt.distance, weightNum, factor);
+      return {
+        id: `r${idx}`,
+        title: `Route ${idx + 1}`,
+        distance: rt.distance,
+        duration: rt.duration,
+        routeCoords: rt.coords,
+        color: ['#10b981', '#eab308', '#ef4444'][idx % 3],
+        co2,
+      };
+    });
 
-    const optionC = {
-      id: 'c',
-      title: 'Option C (Rail + Local Truck)',
-      distance: (routeDataC?.distance || 28) * 0.8, // Rail is more direct
-      duration: (routeDataC?.duration || 45) * 2.5, // Rail is slower but cheaper
-      weight: weightNum,
-      co2: calculateCO2((routeDataC?.distance || 28) * 0.8, weightNum, CO2_FACTORS.rail),
-      routeCoords: routeDataC?.coords || fallbackCoords,
-      color: '#10b981',
-    };
-
-    // Sort by CO2 (best first)
-    const sorted = [optionC, optionB, optionA].sort((a, b) => a.co2 - b.co2);
-
-    const formattedResults = sorted.map((r) => ({
+    // Sort by CO2 ascending
+    const sorted = entries.sort((a, b) => a.co2 - b.co2);
+    const formatted = sorted.map((r, i) => ({
       ...r,
       distanceStr: r.distance.toFixed(1),
       durationStr: r.duration > 60 ? `${Math.floor(r.duration / 60)}h ${r.duration % 60}m` : `${r.duration}m`,
       co2Str: `${r.co2} kg`,
-      badge: {
-        text: r.id === sorted[0].id ? 'Best for CBAM' : r.id === sorted[1].id ? 'Lower' : 'High Emissions',
-        color: r.id === sorted[0].id ? 'bg-emerald-500' : r.id === sorted[1].id ? 'bg-yellow-400' : 'bg-red-500',
-      },
+      badge: { text: i === 0 ? 'Best for CBAM' : i === 1 ? 'Lower' : 'High Emissions', color: i === 0 ? 'bg-emerald-500' : i === 1 ? 'bg-yellow-400' : 'bg-red-500' },
     }));
 
-    setResults(formattedResults);
+    setResults(formatted);
+    setSelectedIndex(0);
     setLoading(false);
   };
 
@@ -130,20 +202,52 @@ export default function GreenRoute() {
           <section className="bg-white p-4 rounded-lg shadow-sm mb-4">
             <h3 className="font-medium mb-3">Route Input</h3>
             <label className="block text-xs text-slate-500 mb-1">Origin</label>
-            <input
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              className="w-full mb-3 px-3 py-2 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              aria-label="Origin"
-            />
+            <div className="relative">
+              <input
+                value={origin}
+                onChange={(e) => handleOriginChange(e.target.value)}
+                className="w-full mb-3 px-3 py-2 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                aria-label="Origin"
+                autoComplete="off"
+              />
+              {originSuggestions.length > 0 && (
+                <ul className="absolute z-20 left-0 right-0 bg-white border border-slate-200 rounded-md mt-1 max-h-48 overflow-auto">
+                  {originSuggestions.map((s, i) => (
+                    <li
+                      key={i}
+                      onClick={() => pickOriginSuggestion(s)}
+                      className="px-3 py-2 hover:bg-emerald-50 cursor-pointer text-sm"
+                    >
+                      {s.display_name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             <label className="block text-xs text-slate-500 mb-1">Destination</label>
-            <input
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              className="w-full mb-3 px-3 py-2 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              aria-label="Destination"
-            />
+            <div className="relative">
+              <input
+                value={destination}
+                onChange={(e) => handleDestChange(e.target.value)}
+                className="w-full mb-3 px-3 py-2 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                aria-label="Destination"
+                autoComplete="off"
+              />
+              {destSuggestions.length > 0 && (
+                <ul className="absolute z-20 left-0 right-0 bg-white border border-slate-200 rounded-md mt-1 max-h-48 overflow-auto">
+                  {destSuggestions.map((s, i) => (
+                    <li
+                      key={i}
+                      onClick={() => pickDestSuggestion(s)}
+                      className="px-3 py-2 hover:bg-emerald-50 cursor-pointer text-sm"
+                    >
+                      {s.display_name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             <label className="block text-xs text-slate-500 mb-1">Transport Weight (tons)</label>
             <input
@@ -156,6 +260,18 @@ export default function GreenRoute() {
               className="w-full mb-3 px-3 py-2 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
               aria-label="Transport Weight"
             />
+
+            <label className="block text-xs text-slate-500 mb-1">Vehicle Type</label>
+            <select
+              value={vehicleType}
+              onChange={(e) => setVehicleType(e.target.value as any)}
+              className="w-full mb-3 px-3 py-2 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              aria-label="Vehicle Type"
+            >
+              <option value="truck">Standard Truck</option>
+              <option value="ecodrive">Eco-Driving</option>
+              <option value="rail">Rail + Truck</option>
+            </select>
 
             <button
               onClick={handleCalculate}
@@ -175,11 +291,14 @@ export default function GreenRoute() {
 
             <div className="space-y-3">
               {results &&
-                results.map((r) => (
-                  <div
-                    key={r.id}
-                    className="bg-white p-3 rounded-lg shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between"
-                  >
+                  results.map((r, idx) => (
+                    <div
+                      key={r.id}
+                      onClick={() => setSelectedIndex(idx)}
+                      role="button"
+                      tabIndex={0}
+                      className={`bg-white p-3 rounded-lg shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between cursor-pointer ${selectedIndex === idx ? 'ring-2 ring-emerald-200' : ''}`}
+                    >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <div className="text-sm font-semibold text-slate-700">{r.title}</div>
@@ -192,9 +311,9 @@ export default function GreenRoute() {
                       </div>
                     </div>
                     <div className="mt-3 md:mt-0 ml-0 md:ml-4 text-slate-400 flex-shrink-0">
-                      {r.title.includes('Standard') && <Truck className="w-6 h-6 text-slate-400" />}
-                      {r.title.includes('Eco-Driving') && <Truck className="w-6 h-6 text-yellow-500" />}
-                      {r.title.includes('Rail') && <Train className="w-6 h-6 text-emerald-500" />}
+                      {vehicleType === 'truck' && <Truck className="w-6 h-6 text-slate-400" />}
+                      {vehicleType === 'ecodrive' && <Truck className="w-6 h-6 text-yellow-500" />}
+                      {vehicleType === 'rail' && <Train className="w-6 h-6 text-emerald-500" />}
                     </div>
                   </div>
                 ))}
@@ -208,6 +327,7 @@ export default function GreenRoute() {
             <h3 className="font-medium mb-3">Live Route Visualization</h3>
             {results ? (
               <MapContainer
+                whenCreated={(map) => (mapRef.current = map)}
                 center={[(ORIGIN_COORDS[0] + DESTINATION_COORDS[0]) / 2, (ORIGIN_COORDS[1] + DESTINATION_COORDS[1]) / 2]}
                 zoom={12}
                 className="w-full h-56 md:h-96 rounded-md"
@@ -217,26 +337,22 @@ export default function GreenRoute() {
                   attribution='&copy; OpenStreetMap contributors'
                 />
                 {/* Origin marker */}
-                <Marker position={ORIGIN_COORDS}>
+                <Marker position={results[0].routeCoords[0]}>
                   <Popup>Origin: {origin}</Popup>
                 </Marker>
 
                 {/* Destination marker */}
-                <Marker position={DESTINATION_COORDS}>
+                <Marker position={results[0].routeCoords[results[0].routeCoords.length - 1]}>
                   <Popup>Destination: {destination}</Popup>
                 </Marker>
 
                 {/* Route polylines */}
-                {results.map((r) => (
+                {results.map((r, idx) => (
                   <Polyline
                     key={r.id}
                     positions={r.routeCoords}
-                    color={r.color}
-                    weight={r.id === 'c' ? 4 : 2}
-                    opacity={r.id === 'c' ? 1 : 0.6}
-                  >
-                    <Popup>{r.title}</Popup>
-                  </Polyline>
+                    pathOptions={{ color: r.color, weight: selectedIndex === idx ? 6 : 3, opacity: selectedIndex === idx ? 1 : 0.6 }}
+                  />
                 ))}
               </MapContainer>
             ) : (
