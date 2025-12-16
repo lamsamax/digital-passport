@@ -1,15 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { QrCode, Package, CheckCircle, XCircle, Leaf, Factory, TrendingDown } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { materialTypes, suppliers, emissionsData } from '../data/mockData';
 
 export default function MaterialPassport() {
   const [formData, setFormData] = useState({
-    materialType: 'Cement',
-    supplier: 'Cementara Kakanj',
+    materialType: 'Kakanj Cement Standard (CEM II)',
+    supplier: 'Tvornica Cementa Kakanj (TCK)',
     weight: 10,
   });
   const [showPassport, setShowPassport] = useState(false);
   const [passportData, setPassportData] = useState<any>(null);
+  const [scannerActive, setScannerActive] = useState(false);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+
+  useEffect(() => {
+    if (!scannerActive) {
+      return;
+    }
+
+    const scanner = new Html5QrcodeScanner(
+      'reader',
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+      },
+      false
+    );
+
+    scannerRef.current = scanner;
+
+    scanner.render(
+      (decodedText) => {
+        try {
+          const qrData = JSON.parse(decodedText);
+          if (qrData.materialType && qrData.supplier && qrData.weight !== undefined) {
+            setFormData({
+              materialType: qrData.materialType,
+              supplier: qrData.supplier,
+              weight: qrData.weight,
+            });
+            setScannerActive(false);
+          }
+        } catch (error) {
+          console.error('Invalid QR code format');
+        }
+      },
+      (error) => {
+        console.warn('QR scan error:', error);
+      }
+    );
+
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(() => {});
+        scannerRef.current = null;
+      }
+    };
+  }, [scannerActive]);
 
   const handleCalculate = () => {
     const key = `${formData.materialType}-${formData.supplier}`;
@@ -36,15 +85,34 @@ export default function MaterialPassport() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-emerald-500 rounded-lg flex items-center justify-center">
-              <QrCode className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-emerald-500 rounded-lg flex items-center justify-center">
+                <QrCode className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Scan Material Batch</h3>
+                <p className="text-sm text-slate-500">Enter or scan QR code data</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">Scan Material Batch</h3>
-              <p className="text-sm text-slate-500">Enter or scan QR code data</p>
-            </div>
+            <button
+              onClick={() => setScannerActive(!scannerActive)}
+              className={`px-4 py-2 rounded-lg font-medium text-white transition-colors ${
+                scannerActive
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : 'bg-emerald-500 hover:bg-emerald-600'
+              }`}
+            >
+              {scannerActive ? 'Stop Scanner' : 'Start Scanner'}
+            </button>
           </div>
+
+          {scannerActive && (
+            <div
+              id="reader"
+              className="mb-6 w-full rounded-lg overflow-hidden border-2 border-emerald-500"
+            />
+          )}
 
           <div className="space-y-5">
             <div>
@@ -54,31 +122,24 @@ export default function MaterialPassport() {
               <select
                 value={formData.materialType}
                 onChange={(e) => setFormData({ ...formData, materialType: e.target.value })}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none"
               >
-                {materialTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
+                <option value="Kakanj Cement Standard (CEM II)">Kakanj Cement Standard (CEM II)</option>
+                <option value="Kakanj Cement Profi (CEM I)">Kakanj Cement Profi (CEM I)</option>
+                <option value="Kakanj Sivi">Kakanj Sivi</option>
               </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Supplier
+                Supplier / Origin
               </label>
-              <select
+              <input
+                type="text"
                 value={formData.supplier}
-                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-              >
-                {suppliers.map((supplier) => (
-                  <option key={supplier} value={supplier}>
-                    {supplier}
-                  </option>
-                ))}
-              </select>
+                readOnly
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-100 text-slate-700 cursor-not-allowed outline-none"
+              />
             </div>
 
             <div>
@@ -89,7 +150,7 @@ export default function MaterialPassport() {
                 type="number"
                 value={formData.weight}
                 onChange={(e) => setFormData({ ...formData, weight: Number(e.target.value) })}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 outline-none"
                 min="1"
                 step="0.1"
               />
@@ -97,7 +158,7 @@ export default function MaterialPassport() {
 
             <button
               onClick={handleCalculate}
-              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3 px-6 rounded-lg transition-colors shadow-lg shadow-emerald-500/30"
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 px-6 rounded-lg transition-colors shadow-lg shadow-emerald-600/30"
             >
               Calculate Impact
             </button>
@@ -107,10 +168,10 @@ export default function MaterialPassport() {
             <div className="flex items-start gap-3">
               <Package className="w-5 h-5 text-slate-500 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-slate-900 mb-1">QR Code Simulation</p>
+                <p className="text-sm font-medium text-slate-900 mb-1">QR Code Format</p>
                 <p className="text-xs text-slate-600">
-                  In production, this would scan actual QR codes from material batches and automatically
-                  populate the form with embedded certificate data.
+                  Expected JSON format: {'{'}
+                  "materialType": "Cement", "supplier": "Name", "weight": 10{'}'}
                 </p>
               </div>
             </div>
@@ -128,7 +189,7 @@ export default function MaterialPassport() {
                 <div
                   className={`px-4 py-2 rounded-lg font-bold ${
                     passportData.cbamStatus === 'Valid'
-                      ? 'bg-emerald-500 text-white'
+                      ? 'bg-emerald-600 text-white'
                       : 'bg-red-500 text-white'
                   }`}
                 >
@@ -221,7 +282,7 @@ export default function MaterialPassport() {
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex items-center gap-3 mb-4">
-              <TrendingDown className="w-5 h-5 text-emerald-500" />
+              <TrendingDown className="w-5 h-5 text-emerald-400" />
               <h4 className="font-bold text-slate-900">Compliance Tip</h4>
             </div>
             <p className="text-sm text-slate-600 mb-3">
@@ -235,7 +296,7 @@ export default function MaterialPassport() {
                 'Modern, efficient facilities',
               ].map((tip, index) => (
                 <li key={index} className="flex items-start gap-2 text-sm text-slate-600">
-                  <span className="text-emerald-500 font-bold">•</span>
+                  <span className="text-emerald-400 font-bold">•</span>
                   <span>{tip}</span>
                 </li>
               ))}

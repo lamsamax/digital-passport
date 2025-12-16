@@ -37,8 +37,25 @@ export default function Dashboard() {
           icon={Award}
           trend="up"
           trendValue="12 pts"
-          iconColor="bg-emerald-600"
+          iconColor="bg-emerald-500"
         />
+      </div>
+
+      <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-xl shadow-lg p-6 text-white">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-bold mb-1">Heidelberg Net-Zero Target</h3>
+            <p className="text-emerald-100 text-sm">Progress to 2030 Carbon Neutrality Goal</p>
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-bold">74%</p>
+            <p className="text-emerald-100 text-sm">to 2030 Target</p>
+          </div>
+        </div>
+        <div className="w-full bg-emerald-800 rounded-full h-3">
+          <div className="bg-white h-3 rounded-full transition-all" style={{ width: '74%' }}></div>
+        </div>
+        <p className="text-emerald-100 text-xs mt-3">Kakanj facility on track to meet corporate sustainability commitments</p>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -78,7 +95,7 @@ export default function Dashboard() {
             <Bar
               dataKey="co2"
               name="CO2 Emissions (kg)"
-              fill="#10b981"
+              fill="#34d399"
               radius={[8, 8, 0, 0]}
               barSize={80}
             />
@@ -86,7 +103,7 @@ export default function Dashboard() {
         </ResponsiveContainer>
         <div className="mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
           <p className="text-sm font-medium text-emerald-900">
-            <span className="font-bold">4,080 kg CO2</span> saved by using EcoTrace-optimized sourcing.
+            <span className="font-bold">4,080 kg CO2</span> saved by using optimized sourcing.
             That's equivalent to planting <span className="font-bold">185 trees</span> annually.
           </p>
         </div>
@@ -141,7 +158,7 @@ export default function Dashboard() {
                 </div>
                 <div className="w-full bg-slate-200 rounded-full h-2">
                   <div
-                    className="bg-emerald-500 h-2 rounded-full transition-all"
+                    className="bg-emerald-600 h-2 rounded-full transition-all"
                     style={{ width: `${supplier.score}%` }}
                   />
                 </div>
