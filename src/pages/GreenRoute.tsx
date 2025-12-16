@@ -79,8 +79,8 @@ const suggest = async (q: string) => {
 };
 
 export default function GreenRoute() {
-  const [origin, setOrigin] = useState('Cementara Kakanj');
-  const [destination, setDestination] = useState('Sarajevo Tower');
+  const [origin, setOrigin] = useState('Kakanj');
+  const [destination, setDestination] = useState('Sarajevo');
   const [weight, setWeight] = useState('10'); // tons
   const [vehicleType, setVehicleType] = useState<'truck' | 'ecodrive' | 'rail'>('truck');
   const [results, setResults] = useState<any[] | null>(null);

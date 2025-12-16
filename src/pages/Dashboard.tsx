@@ -1,8 +1,12 @@
-import { Cloud, Euro, Award } from 'lucide-react';
+import { Cloud, Euro, Award, FileText } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import { dashboardMetrics } from '../data/mockData';
 
 export default function Dashboard() {
+  const handleGenerateReport = () => {
+    window.open('/cbamreport.pdf', '_blank');
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -39,6 +43,14 @@ export default function Dashboard() {
           iconColor="bg-emerald-500"
         />
       </div>
+
+      <button
+        onClick={handleGenerateReport}
+        className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-medium px-6 py-3 rounded-lg transition-colors shadow-lg"
+      >
+        <FileText className="w-5 h-5" />
+        Generate Monthly Report
+      </button>
 
       <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-xl shadow-lg p-6 text-white">
         <div className="flex items-center justify-between mb-4">
